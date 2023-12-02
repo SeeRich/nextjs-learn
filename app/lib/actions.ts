@@ -7,9 +7,13 @@ import { redirect } from "next/navigation";
 
 const FormSchema = z.object({
   id: z.string(),
-  customerId: z.string({ invalid_type_error: 'Please select a customer.' }),
-  amount: z.coerce.number().gt(0, { message: "Please enter an amoutn greater than $0." }),
-  status: z.enum(["pending", "paid"], { invalid_type_error: "Please select an invoice status." }),
+  customerId: z.string({ invalid_type_error: "Please select a customer." }),
+  amount: z.coerce
+    .number()
+    .gt(0, { message: "Please enter an amount greater than $0." }),
+  status: z.enum(["pending", "paid"], {
+    invalid_type_error: "Please select an invoice status.",
+  }),
   date: z.string(),
 });
 
@@ -34,13 +38,11 @@ export async function createInvoice(prevState: State, formData: FormData) {
     status: formData.get("status"),
   });
 
-  console.log(validatedFields);
-
   // If form validation fails, return errors early. Otherwise, continue.
   if (!validatedFields.success) {
     return {
       errors: validatedFields.error.flatten().fieldErrors,
-      message: 'Missing Fields. Failed to Create Invoice.',
+      message: "Missing Fields. Failed to Create Invoice.",
     };
   }
 
@@ -54,7 +56,7 @@ export async function createInvoice(prevState: State, formData: FormData) {
   VALUES (${customerId}, ${amountInCents}, ${status}, ${date})
 `;
   } catch (error) {
-    return { message: "Database Error: Failed to Create Invoice" }
+    return { message: "Database Error: Failed to Create Invoice" };
   }
 
   // Tell next to invalidate the cache for invoices route
@@ -63,13 +65,25 @@ export async function createInvoice(prevState: State, formData: FormData) {
   redirect("/dashboard/invoices");
 }
 
-export async function updateInvoice(id: string, formData: FormData) {
-  const { customerId, amount, status } = UpdateInvoice.parse({
+export async function updateInvoice(
+  id: string,
+  prevState: State,
+  formData: FormData
+) {
+  const validatedFields = UpdateInvoice.safeParse({
     customerId: formData.get("customerId"),
     amount: formData.get("amount"),
     status: formData.get("status"),
   });
 
+  if (!validatedFields.success) {
+    return {
+      errors: validatedFields.error.flatten().fieldErrors,
+      message: "Missing Fields. Failed to Update Invoice.",
+    };
+  }
+
+  const { customerId, amount, status } = validatedFields.data;
   const amountInCents = amount * 100;
 
   try {
@@ -79,7 +93,7 @@ export async function updateInvoice(id: string, formData: FormData) {
       WHERE id = ${id}
     `;
   } catch (error) {
-    return { message: 'Database Error: Failed to Update Invoice.' };
+    return { message: "Database Error: Failed to Update Invoice." };
   }
 
   revalidatePath("/dashboard/invoices");
@@ -87,13 +101,11 @@ export async function updateInvoice(id: string, formData: FormData) {
 }
 
 export async function deleteInvoice(id: string) {
-  throw new Error('Failed to Delete Invoice');
-
   try {
     await sql`DELETE FROM invoices WHERE id = ${id}`;
-    revalidatePath('/dashboard/invoices');
-    return { message: 'Deleted Invoice.' };
+    revalidatePath("/dashboard/invoices");
+    return { message: "Deleted Invoice." };
   } catch (error) {
-    return { message: 'Database Error: Failed to Delete Invoice.' };
+    return { message: "Database Error: Failed to Delete Invoice." };
   }
 }
